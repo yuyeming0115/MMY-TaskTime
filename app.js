@@ -2,6 +2,14 @@
     'use strict';
 
     const STORAGE_KEY = 'mmy_tasktime_data';
+    const isTauri = typeof window.__TAURI__ !== 'undefined';
+    let invoke = null, listen = null, appWindow = null;
+    if (isTauri) {
+        invoke = window.__TAURI__.core.invoke;
+        listen = window.__TAURI__.event.listen;
+        const winApi = window.__TAURI__.window;
+        appWindow = winApi.getCurrent ? winApi.getCurrent() : (winApi.getCurrentWindow ? winApi.getCurrentWindow() : null);
+    }
 
     const QUICK_TASKS = [
         { id: 'q5', time: 5, name: '外包跟进反馈', loop: false, color: '#007AFF', type: 'normal' },
@@ -15,7 +23,9 @@
         startTime: '09:30',
         endTime: '19:30',
         soundEnabled: true,
-        notificationEnabled: true
+        notificationEnabled: true,
+        autostartEnabled: false,
+        alwaysOnTop: true
     };
 
     let data = {
@@ -29,6 +39,8 @@
     let dragState = { dragging: false, ox: 0, oy: 0 };
     let clockReminderFired = { date: '', type: '' };
     let audioCtx = null;
+    let isSnapped = false;
+    let snapHideTimer = null;
 
     function init() {
         load();
@@ -41,6 +53,121 @@
         setInterval(tick, 1000);
         setInterval(checkClockReminder, 60000);
         checkClockReminder();
+        if (isTauri) {
+            initTauri();
+        }
+    }
+
+    async function initTauri() {
+        document.body.classList.add('in-tauri');
+        document.getElementById('autostartRow').style.display = 'flex';
+        document.getElementById('quitRow').style.display = 'flex';
+        document.getElementById('windowCloseBtn').style.display = 'flex';
+
+        try {
+            const autostartEnabled = await invoke('is_autostart_enabled');
+            data.settings.autostartEnabled = autostartEnabled;
+            document.getElementById('autostartToggle').checked = autostartEnabled;
+        } catch (e) {
+            console.error('Failed to get autostart status:', e);
+        }
+
+        try {
+            await listen('switch-mode', (event) => {
+                if (event.payload === 'full') {
+                    switchToFull();
+                } else if (event.payload === 'mini') {
+                    switchToMini();
+                }
+            });
+
+            await listen('toggle-mode', () => {
+                toggleMode();
+            });
+
+            await listen('start-task', (event) => {
+                if (!event.payload) return;
+                let taskId = null;
+                if (event.payload.id) {
+                    taskId = event.payload.id;
+                } else if (event.payload.minutes) {
+                    const task = QUICK_TASKS.find(t => t.time === event.payload.minutes);
+                    if (task) taskId = task.id;
+                }
+                if (taskId && tasks[taskId]) {
+                    toggleTask(taskId);
+                }
+            });
+
+            await listen('autostart-changed', (event) => {
+                data.settings.autostartEnabled = event.payload;
+                document.getElementById('autostartToggle').checked = event.payload;
+                save();
+            });
+        } catch (e) {
+            console.error('Failed to listen to Tauri events:', e);
+        }
+
+        const savedPos = localStorage.getItem('windowPosition');
+        if (savedPos) {
+            try {
+                const pos = JSON.parse(savedPos);
+                await invoke('set_window_position', { x: pos.x, y: pos.y });
+            } catch (e) {
+                console.error('Failed to restore window position:', e);
+            }
+        }
+
+        initEdgeSnap();
+    }
+
+    function initEdgeSnap() {
+        if (!isTauri || !isMini) return;
+
+        document.addEventListener('mousemove', handleMouseMoveForSnap);
+        document.addEventListener('mouseleave', handleMouseLeaveForSnap);
+    }
+
+    function handleMouseMoveForSnap(e) {
+        if (!isTauri || !isMini || !isSnapped) return;
+
+        const app = document.getElementById('app');
+        const rect = app.getBoundingClientRect();
+        const threshold = 10;
+
+        let nearEdge = false;
+        if (rect.left <= threshold && e.clientX <= rect.width + threshold) {
+            nearEdge = true;
+        } else if (window.innerWidth - rect.right <= threshold && e.clientX >= window.innerWidth - rect.width - threshold) {
+            nearEdge = true;
+        } else if (rect.top <= threshold && e.clientY <= rect.height + threshold) {
+            nearEdge = true;
+        }
+
+        if (nearEdge) {
+            if (snapHideTimer) {
+                clearTimeout(snapHideTimer);
+                snapHideTimer = null;
+            }
+            invoke('snap_show').catch(err => console.error('snap_show error:', err));
+        }
+    }
+
+    function handleMouseLeaveForSnap(e) {
+        if (!isTauri || !isMini || !isSnapped) return;
+
+        if (snapHideTimer) {
+            clearTimeout(snapHideTimer);
+        }
+        snapHideTimer = setTimeout(() => {
+            const app = document.getElementById('app');
+            const rect = app.getBoundingClientRect();
+            if (e.clientX < rect.left - 5 || e.clientX > rect.right + 5 ||
+                e.clientY < rect.top - 5 || e.clientY > rect.bottom + 5) {
+                invoke('snap_hide').catch(err => console.error('snap_hide error:', err));
+            }
+            snapHideTimer = null;
+        }, 500);
     }
 
     function load() {
@@ -196,6 +323,7 @@
         const hasPrimary = getAllTasks().some(x => x.isPrimary && x.running);
         t.isPrimary = !hasPrimary;
         renderAll();
+        updateTrayTooltip();
     }
 
     function stopTask(id) {
@@ -210,6 +338,7 @@
             if (next) next.isPrimary = true;
         }
         renderAll();
+        updateTrayTooltip();
     }
 
     function recordTaskCompletion(task) {
@@ -253,6 +382,18 @@
         renderPrimary();
         renderQuickGrid();
         renderRunningBar();
+        updateTrayTooltip();
+    }
+
+    function updateTrayTooltip() {
+        if (!isTauri) return;
+        const primary = getPrimaryTask();
+        let tooltip = 'MMY-TaskTime';
+        if (primary) {
+            const timeStr = formatTime(primary.remaining);
+            tooltip = primary.name + ' - 剩余' + timeStr;
+        }
+        invoke('set_tray_tooltip', { tooltip }).catch(err => console.error('set_tray_tooltip error:', err));
     }
 
     function updateClock() {
@@ -568,6 +709,9 @@
         document.getElementById('endTimeInput').value = data.settings.endTime;
         document.getElementById('soundToggle').checked = data.settings.soundEnabled;
         document.getElementById('notificationToggle').checked = data.settings.notificationEnabled;
+        if (isTauri) {
+            document.getElementById('autostartToggle').checked = data.settings.autostartEnabled;
+        }
     }
 
     function updateSettings() {
@@ -579,6 +723,41 @@
         save();
         if (data.settings.notificationEnabled) {
             initNotification();
+        }
+    }
+
+    async function toggleAutostart() {
+        if (!isTauri) return;
+        const enabled = document.getElementById('autostartToggle').checked;
+        try {
+            if (enabled) {
+                await invoke('enable_autostart');
+            } else {
+                await invoke('disable_autostart');
+            }
+            data.settings.autostartEnabled = enabled;
+            save();
+        } catch (e) {
+            console.error('Failed to toggle autostart:', e);
+            document.getElementById('autostartToggle').checked = !enabled;
+        }
+    }
+
+    async function quitApp() {
+        if (!isTauri) return;
+        try {
+            await invoke('quit_app');
+        } catch (e) {
+            console.error('Failed to quit app:', e);
+        }
+    }
+
+    async function hideWindow() {
+        if (!isTauri) return;
+        try {
+            await invoke('hide_window');
+        } catch (e) {
+            console.error('Failed to hide window:', e);
         }
     }
 
@@ -679,34 +858,122 @@
         URL.revokeObjectURL(url);
     }
 
-    function toggleMode() {
-        isMini = !isMini;
+    async function switchToMini() {
+        if (isMini) return;
+        isMini = true;
         const app = document.getElementById('app');
         const toggle = document.getElementById('modeToggle');
-        app.classList.toggle('full-mode', !isMini);
-        app.classList.toggle('mini-mode', isMini);
-        toggle.textContent = isMini ? '↗' : '↙';
-        toggle.title = isMini ? '展开完整模式' : '切换精简模式';
+        app.classList.remove('full-mode');
+        app.classList.add('mini-mode');
+        document.body.classList.add('mini-mode');
+        toggle.textContent = '↗';
+        toggle.title = '展开完整模式';
 
-        if (isMini) {
+        if (isTauri) {
+            try {
+                await invoke('set_always_on_top', { alwaysOnTop: data.settings.alwaysOnTop });
+                const appHeight = app.offsetHeight;
+                await invoke('set_window_size', { width: 156, height: appHeight > 0 ? appHeight : 200 });
+                await invoke('set_skip_taskbar', { skip: true });
+                isSnapped = await invoke('is_snapped');
+            } catch (e) {
+                console.error('Failed to switch to mini mode in Tauri:', e);
+            }
+        } else {
             app.style.top = '28px';
             app.style.left = 'auto';
             app.style.right = '28px';
             app.style.transform = 'none';
+        }
+
+        hideAddForm();
+        renderAll();
+        if (isTauri) {
+            initEdgeSnap();
+        }
+    }
+
+    async function switchToFull() {
+        if (!isMini) return;
+
+        if (isTauri && isSnapped) {
+            try {
+                await invoke('edge_unsnap');
+                isSnapped = false;
+            } catch (e) {
+                console.error('Failed to unsnap:', e);
+            }
+        }
+
+        isMini = false;
+        const app = document.getElementById('app');
+        const toggle = document.getElementById('modeToggle');
+        app.classList.remove('mini-mode');
+        app.classList.add('full-mode');
+        document.body.classList.remove('mini-mode');
+        toggle.textContent = '↙';
+        toggle.title = '切换精简模式';
+
+        if (isTauri) {
+            try {
+                await invoke('set_always_on_top', { alwaysOnTop: false });
+                await invoke('set_window_size', { width: 360, height: 600 });
+                await invoke('set_skip_taskbar', { skip: false });
+            } catch (e) {
+                console.error('Failed to switch to full mode in Tauri:', e);
+            }
         } else {
             app.style.top = '50%';
             app.style.left = '50%';
             app.style.right = 'auto';
             app.style.transform = 'translate(-50%, -50%)';
         }
+
+        document.removeEventListener('mousemove', handleMouseMoveForSnap);
+        document.removeEventListener('mouseleave', handleMouseLeaveForSnap);
+
         hideAddForm();
         renderAll();
     }
 
+    async function toggleMode() {
+        if (isMini) {
+            await switchToFull();
+        } else {
+            await switchToMini();
+        }
+    }
+
+    async function saveWindowPosition() {
+        if (!isTauri) return;
+        try {
+            const pos = await invoke('get_window_position');
+            localStorage.setItem('windowPosition', JSON.stringify({ x: pos[0], y: pos[1] }));
+        } catch (e) {
+            console.error('Failed to save window position:', e);
+        }
+    }
+
+    async function handleDragEnd() {
+        dragState.dragging = false;
+        await saveWindowPosition();
+
+        if (isTauri && isMini) {
+            try {
+                await invoke('edge_unsnap');
+                isSnapped = false;
+                const snapped = await invoke('snap_check');
+                isSnapped = snapped;
+            } catch (e) {
+                console.error('Failed to check edge snap:', e);
+            }
+        }
+    }
+
     function bindEvents() {
-        document.getElementById('modeToggle').addEventListener('click', (e) => {
+        document.getElementById('modeToggle').addEventListener('click', async (e) => {
             e.stopPropagation();
-            toggleMode();
+            await toggleMode();
         });
 
         document.getElementById('stopBtn').addEventListener('click', () => {
@@ -750,11 +1017,37 @@
             }
         });
 
+        if (isTauri) {
+            document.getElementById('autostartToggle').addEventListener('change', toggleAutostart);
+            document.getElementById('quitAppBtn').addEventListener('click', quitApp);
+            document.getElementById('windowCloseBtn').addEventListener('click', hideWindow);
+        }
+
         const dh = document.getElementById('dragHandle');
         const app = document.getElementById('app');
 
-        dh.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.mode-toggle')) return;
+        dh.addEventListener('mousedown', async (e) => {
+            if (e.target.closest('.mode-toggle') || e.target.closest('.window-close-btn')) return;
+
+            if (isTauri && isMini && isSnapped) {
+                try {
+                    await invoke('edge_unsnap');
+                    isSnapped = false;
+                } catch (err) {
+                    console.error('Failed to unsnap before drag:', err);
+                }
+            }
+
+            if (isTauri) {
+                try {
+                    await appWindow.startDragging();
+                    dragState.dragging = true;
+                    return;
+                } catch (err) {
+                    console.error('Native drag failed, falling back to JS drag:', err);
+                }
+            }
+
             dragState.dragging = true;
             const r = app.getBoundingClientRect();
             dragState.ox = e.clientX - r.left;
@@ -766,18 +1059,22 @@
             e.preventDefault();
         });
 
-        document.addEventListener('mousemove', (e) => {
-            if (!dragState.dragging) return;
-            let nl = e.clientX - dragState.ox;
-            let nt = e.clientY - dragState.oy;
-            nl = Math.max(0, Math.min(nl, window.innerWidth - app.offsetWidth));
-            nt = Math.max(0, Math.min(nt, window.innerHeight - app.offsetHeight));
-            app.style.left = nl + 'px';
-            app.style.top = nt + 'px';
-        });
+        if (!isTauri) {
+            document.addEventListener('mousemove', (e) => {
+                if (!dragState.dragging) return;
+                let nl = e.clientX - dragState.ox;
+                let nt = e.clientY - dragState.oy;
+                nl = Math.max(0, Math.min(nl, window.innerWidth - app.offsetWidth));
+                nt = Math.max(0, Math.min(nt, window.innerHeight - app.offsetHeight));
+                app.style.left = nl + 'px';
+                app.style.top = nt + 'px';
+            });
+        }
 
-        document.addEventListener('mouseup', () => {
-            dragState.dragging = false;
+        document.addEventListener('mouseup', async () => {
+            if (dragState.dragging) {
+                await handleDragEnd();
+            }
         });
 
         document.addEventListener('keydown', (e) => {

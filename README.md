@@ -1,9 +1,10 @@
 # MMY-TaskTime 极简任务计时器
 
-> 悬浮置顶的极简Web任务计时器，支持多任务并行，提供心流操作体验
+> 悬浮置顶的极简任务计时器，支持多任务并行，Web版 + Tauri桌面版双形态
 
 ![version](https://img.shields.io/badge/version-v2.0-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
+![tauri](https://img.shields.io/badge/Tauri-v2-FFC131?logo=tauri)
 
 ## ✨ 特性
 
@@ -35,7 +36,7 @@
 
 ### 🔔 提醒机制
 - Web Audio API 合成双音"叮"提示音
-- 浏览器桌面通知
+- 浏览器/系统桌面通知
 - 上下班打卡提醒（默认 9:30 / 19:30，可自定义）
 - 循环任务到点自动重启，持续提醒
 
@@ -45,14 +46,39 @@
 - **仅统计常规任务**，AI循环任务不纳入
 - 支持导出 HTML 报告
 
+### 🖥️ 桌面端专属功能（Tauri版）
+- **真正窗口置顶**：无浏览器限制的系统级置顶
+- **系统托盘**：快速启动任务、切换模式、设置自启、退出
+- **全局快捷键**：`Ctrl+Shift+T` 切换显示/隐藏，`Ctrl+Shift+M` 切换模式
+- **开机自启**：系统启动时自动运行（可在设置中开关）
+- **边缘吸附**：拖到屏幕边缘自动半隐藏，鼠标悬停展开
+- **任务栏隐藏**：精简模式下不出现在任务栏，仅托盘可见
+- **原生窗口拖拽**：流畅的系统级拖拽体验
+
 ## 🚀 快速开始
 
+### Web版（最简单）
 直接用浏览器打开 `index.html` 即可使用。
 
 ```bash
 # 或启动本地服务器
 python -m http.server 8080
 # 然后访问 http://localhost:8080
+```
+
+### 桌面版（Tauri）
+
+**前置要求**：Rust 1.70+、Node.js 18+、WebView2（Windows内置）
+
+```bash
+# 安装依赖
+npm install
+
+# 开发模式（热重载）
+npm run tauri dev
+
+# 打包生产版本（生成安装包到 src-tauri/target/release/bundle）
+npm run tauri build
 ```
 
 ## 🎮 使用说明
@@ -65,41 +91,48 @@ python -m http.server 8080
 | 点击 + 号 | 添加自定义任务 |
 | 点击 ⚙ | 打开设置面板 |
 | 点击 📊 | 打开统计面板 |
+| Ctrl+Shift+T | 桌面版：显示/隐藏窗口 |
+| Ctrl+Shift+M | 桌面版：切换双模式 |
 | ESC | 关闭模态框/表单 |
 
 ## 🛠️ 技术栈
 
-- **纯前端**：HTML + CSS + JavaScript（无构建依赖）
-- **数据存储**：localStorage
-- **提醒方式**：Web Audio API + Notification API
-- **UI设计**：极简黑白灰风格，蓝色主色，橙色循环任务标识
+### Web版
+- 纯 HTML + CSS + JavaScript（无构建依赖）
+- 数据存储：localStorage
+- 提醒方式：Web Audio API + Notification API
+
+### 桌面版
+- **前端**：同一套Web代码（HTML/CSS/JS），无框架
+- **后端**：Rust + Tauri v2
+- **插件**：tauri-plugin-autostart、tauri-plugin-global-shortcut
+- **系统特性**：托盘图标、全局快捷键、窗口管理、边缘吸附
 
 ## 📁 项目结构
 
 ```
 MMY-TaskTime/
-├── index.html          # 主页面
-├── style.css           # 样式文件
-├── app.js              # 应用逻辑
-├── README.md           # 项目说明
-├── .gitignore          # Git忽略配置
-├── archive/            # 历史版本归档
-│   ├── v1.0-full/      # v1.0 单任务版本
-│   └── v2.0-multitask/ # v2.0 多任务原型
-└── 开发文档/           # 中文开发文档
-    ├── 产品需求文档.md
-    ├── 开发计划.md
-    └── 验证清单.md
+├── index.html              # 主页面（Web/桌面共用）
+├── style.css               # 样式文件（Web/桌面共用）
+├── app.js                  # 应用逻辑（Web/桌面共用，含Tauri API检测）
+├── package.json            # npm脚本配置
+├── README.md               # 项目说明
+├── .gitignore              # Git忽略配置
+├── archive/                # 历史版本归档
+│   ├── v1.0-full/          # v1.0 单任务版本
+│   └── v2.0-multitask/     # v2.0 多任务原型
+├── 开发文档/               # 中文开发文档
+│   ├── 产品需求文档.md
+│   ├── 开发计划.md
+│   └── 验证清单.md
+└── src-tauri/              # Tauri桌面端Rust代码
+    ├── Cargo.toml          # Rust依赖配置
+    ├── tauri.conf.json     # Tauri应用配置
+    ├── capabilities/       # 权限配置
+    ├── icons/              # 应用图标
+    └── src/
+        └── main.rs         # Rust主程序（窗口/托盘/快捷键/边缘吸附）
 ```
-
-## 📌 桌面端路线图
-
-未来计划使用 **Tauri** 打包为 Win/Mac 桌面应用，实现：
-- 真正的窗口置顶
-- 系统托盘图标
-- 全局快捷键（一键唤出/隐藏）
-- 开机自启
-- 边缘吸附自动收起
 
 ## 📄 License
 

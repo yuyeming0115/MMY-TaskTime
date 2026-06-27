@@ -10,6 +10,7 @@
     <div class="app-container full-mode" id="app">
         <div class="drag-handle" id="dragHandle">
             <button class="mode-toggle" id="modeToggle" title="切换精简模式">↙</button>
+            <button class="window-close-btn" id="windowCloseBtn" title="隐藏到托盘" style="display: none;">×</button>
         </div>
 
         <div class="clock-section">
@@ -101,6 +102,16 @@
                         <input type="checkbox" id="notificationToggle">
                         <span class="toggle-slider"></span>
                     </label>
+                </div>
+                <div class="setting-row" id="autostartRow" style="display: none;">
+                    <span>开机自启动</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="autostartToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="setting-row" id="quitRow" style="display: none; border-bottom: none; justify-content: center; padding-top: 16px;">
+                    <button class="quit-app-btn" id="quitAppBtn">退出应用</button>
                 </div>
             </div>
         </div>

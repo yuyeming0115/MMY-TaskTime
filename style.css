@@ -8,6 +8,15 @@ body {
     overflow: hidden;
 }
 
+body.in-tauri {
+    background: transparent;
+    overflow: hidden;
+}
+
+body.in-tauri.mini-mode .app-container {
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
 body::before {
     content: '';
     position: absolute;
@@ -863,3 +872,51 @@ body::before {
 }
 
 .export-btn:hover { background: #0066dd; }
+
+.full-mode .window-close-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: #f0f0f0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    transition: all 0.2s;
+    right: 36px;
+}
+
+.full-mode .window-close-btn:hover {
+    background: #ff3b30;
+    color: #fff;
+}
+
+.mini-mode .window-close-btn {
+    display: none !important;
+}
+
+.quit-app-btn {
+    padding: 8px 24px;
+    border: none;
+    border-radius: 8px;
+    background: #ff3b30;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.quit-app-btn:hover {
+    background: #d63027;
+}
+
+body.in-tauri::before {
+    display: none;
+}

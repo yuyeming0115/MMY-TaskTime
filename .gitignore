@@ -19,8 +19,16 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Dependencies
+# Node
 node_modules/
+package-lock.json
+
+# Rust / Cargo
+target/
+Cargo.lock
+
+# Tauri
+src-tauri/target/
 
 # Build output
 dist/
@@ -37,9 +45,14 @@ out/
 .temp/
 tmp/
 
-# Screenshots / temp files
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
+# Temp screenshots (root level only, not in icons/))
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.bmp
+
+# Archives
+*.zip
+*.rar
+*.7z

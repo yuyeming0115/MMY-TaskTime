@@ -1,0 +1,24 @@
+{
+  "name": "mmy-tasktime",
+  "version": "2.0.0",
+  "description": "MMY-TaskTime 极简任务计时器 - 悬浮置顶，多任务并行，心流操作体验",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuyeming0115/MMY-TaskTime.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/yuyeming0115/MMY-TaskTime/issues"
+  },
+  "homepage": "https://github.com/yuyeming0115/MMY-TaskTime#readme",
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
