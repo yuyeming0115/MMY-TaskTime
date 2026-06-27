@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MMY-TaskTime 双模式预览 - 多任务并行版</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(120, 80, 200, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(60, 120, 200, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .demo-label {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.9);
+            padding: 10px 24px;
+            border-radius: 24px;
+            font-size: 13px;
+            z-index: 10000;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .mode-hint {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.4);
+            color: rgba(255,255,255,0.8);
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 12px;
+            z-index: 10000;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            line-height: 1.8;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .mode-hint b { color: #FF9500; }
+
+        .app-container {
+            position: absolute;
+            user-select: none;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ====== FULL MODE ====== */
+        .app-container.full-mode {
+            width: 360px;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .full-mode .drag-handle {
+            height: 28px;
+            background: #fafafa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            border-bottom: 1px solid #f0f0f0;
+            position: relative;
+        }
+
+        .full-mode .drag-handle::before {
+            content: '';
+            width: 40px;
+            height: 4px;
+            background: #ddd;
+            border-radius: 2px;
+        }
+
+        .full-mode .clock-section {
+            padding: 20px 20px 12px;
+            text-align: center;
+        }
+
+        .full-mode .clock {
+            font-size: 44px;
+            font-weight: 200;
+            color: #1a1a1a;
+            letter-spacing: 2px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .full-mode .clock-sub {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .full-mode .running-tasks-bar {
+            padding: 0 20px 12px;
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .full-mode .running-chip {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            background: #f0f7ff;
+            color: #007AFF;
+        }
+
+        .full-mode .running-chip.loop {
+            background: #fff7ed;
+            color: #FF9500;
+        }
+
+        .full-mode .running-chip.primary {
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        .full-mode .chip-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .full-mode .primary-task {
+            padding: 0 20px 12px;
+        }
+
+        .full-mode .primary-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .full-mode .progress-bar {
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: #e9ecef;
+        }
+
+        .full-mode .progress-fill {
+            height: 100%;
+            background: #007AFF;
+            width: 55%;
+            transition: width 1s linear;
+        }
+
+        .full-mode .primary-card.loop .progress-fill { background: #FF9500; }
+
+        .full-mode .primary-name {
+            font-size: 13px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .full-mode .primary-timer {
+            font-size: 40px;
+            font-weight: 200;
+            color: #1a1a1a;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.2;
+        }
+
+        .full-mode .primary-controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .full-mode .ctrl-btn {
+            padding: 6px 18px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .full-mode .ctrl-btn.stop { background: #ff3b30; color: #fff; }
+        .full-mode .ctrl-btn.stop:hover { background: #d63027; }
+
+        .full-mode .quick-tasks { padding: 0 20px 12px; }
+        .full-mode .section-title {
+            font-size: 11px;
+            color: #bbb;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .full-mode .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+        }
+
+        .full-mode .quick-btn {
+            background: #f8f9fa;
+            border: 2px solid transparent;
+            border-radius: 10px;
+            padding: 10px 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            position: relative;
+        }
+
+        .full-mode .quick-btn:hover { background: #e9ecef; }
+        .full-mode .quick-btn.running {
+            border-color: #007AFF;
+            background: #f0f7ff;
+        }
+        .full-mode .quick-btn.running.loop { border-color: #FF9500; background: #fff7ed; }
+        .full-mode .quick-btn.primary-active {
+            border-color: #1a1a1a;
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        .full-mode .qb-time { font-size: 16px; font-weight: 600; }
+        .full-mode .qb-label { font-size: 10px; color: #666; margin-top: 2px; line-height: 1.2; }
+        .full-mode .quick-btn.primary-active .qb-label { color: rgba(255,255,255,0.7); }
+
+        .full-mode .qb-ring {
+            position: absolute;
+            top: 3px; right: 3px;
+            width: 14px; height: 14px;
+        }
+
+        .full-mode .qb-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .full-mode .qb-ring circle {
+            fill: none;
+            stroke-width: 2.5;
+        }
+        .full-mode .qb-ring .ring-bg { stroke: #e0e0e0; }
+        .full-mode .qb-ring .ring-fg { stroke: #007AFF; stroke-linecap: round; }
+        .full-mode .quick-btn.running.loop .qb-ring .ring-fg { stroke: #FF9500; }
+        .full-mode .quick-btn.primary-active .qb-ring .ring-bg { stroke: rgba(255,255,255,0.2); }
+
+        .full-mode .task-list-section { padding: 0 20px 12px; }
+        .full-mode .task-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .full-mode .section-title { margin-bottom: 0; }
+        .full-mode .add-task-btn {
+            background: none; border: none; color: #007AFF; font-size: 18px;
+            cursor: pointer; width: 22px; height: 22px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .full-mode .task-list {
+            max-height: 140px;
+            overflow-y: auto;
+        }
+        .full-mode .task-list::-webkit-scrollbar { width: 3px; }
+        .full-mode .task-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+        .full-mode .task-item {
+            display: flex; align-items: center;
+            padding: 8px 10px; background: #fafafa;
+            border-radius: 8px; margin-bottom: 4px;
+        }
+        .full-mode .task-start {
+            width: 28px; height: 28px; border-radius: 50%;
+            border: 2px solid #ddd; background: #fff; cursor: pointer;
+            margin-right: 10px; flex-shrink: 0; display: flex;
+            align-items: center; justify-content: center; font-size: 8px; color: #999;
+        }
+        .full-mode .task-start.running { background: #007AFF; border-color: #007AFF; color: #fff; }
+        .full-mode .task-info { flex: 1; min-width: 0; }
+        .full-mode .task-name { font-size: 12px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .full-mode .task-duration { font-size: 10px; color: #999; }
+        .full-mode .task-delete {
+            width: 22px; height: 22px; border: none; background: none;
+            color: #ccc; cursor: pointer; font-size: 14px;
+        }
+
+        .full-mode .bottom-bar {
+            padding: 10px 20px 14px;
+            display: flex; justify-content: center; gap: 20px;
+            border-top: 1px solid #f0f0f0; background: #fafafa;
+        }
+        .full-mode .bar-btn {
+            width: 34px; height: 34px; border-radius: 50%;
+            border: none; background: #f0f0f0; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; color: #666; transition: all 0.2s;
+        }
+        .full-mode .bar-btn:hover { background: #e0e0e0; }
+
+        .full-mode .mode-toggle {
+            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            width: 22px; height: 22px; border: none; background: #f0f0f0;
+            border-radius: 4px; cursor: pointer; font-size: 11px;
+            display: flex; align-items: center; justify-content: center;
+            color: #666; transition: all 0.2s;
+        }
+        .full-mode .mode-toggle:hover { background: #e0e0e0; }
+
+        /* ====== MINI MODE ====== */
+        .app-container.mini-mode {
+            width: 156px;
+            background: rgba(25, 25, 30, 0.88);
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255,255,255,0.08);
+            top: 28px;
+            right: 28px;
+            left: auto;
+            transform: none;
+        }
+
+        .mini-mode .drag-handle {
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: move;
+            position: relative;
+            padding: 0 8px;
+        }
+
+        .mini-mode .drag-handle::before {
+            content: '';
+            width: 28px;
+            height: 3px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 2px;
+        }
+
+        .mini-mode .mode-toggle {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 18px;
+            height: 18px;
+            border: none;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 9px;
+            color: rgba(255,255,255,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .mini-mode .mode-toggle:hover {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
+        .mini-mode .clock-section {
+            padding: 2px 12px 0;
+            text-align: center;
+        }
+
+        .mini-mode .clock {
+            font-size: 20px;
+            font-weight: 300;
+            color: rgba(255,255,255,0.85);
+            letter-spacing: 1px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .mini-mode .clock-sub { display: none; }
+
+        .mini-mode .running-tasks-bar { display: none; }
+
+        .mini-mode .primary-task {
+            padding: 4px 10px 0;
+        }
+
+        .mini-mode .primary-card {
+            text-align: center;
+            position: relative;
+            padding-bottom: 6px;
+        }
+
+        .mini-mode .primary-card.idle {
+            padding: 8px 0 4px;
+        }
+
+        .mini-mode .progress-bar {
+            height: 2px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 1px;
+            margin: 0 2px;
+            overflow: hidden;
+        }
+
+        .mini-mode .progress-fill {
+            height: 100%;
+            background: #007AFF;
+            border-radius: 1px;
+            width: 55%;
+            transition: width 1s linear;
+        }
+
+        .mini-mode .primary-card.loop .progress-fill { background: #FF9500; }
+        .mini-mode .primary-card.idle .progress-bar { display: none; }
+
+        .mini-mode .primary-name {
+            font-size: 10px;
+            color: rgba(255,255,255,0.45);
+            margin-top: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .mini-mode .primary-card.idle .primary-name {
+            color: rgba(255,255,255,0.3);
+            font-size: 11px;
+            margin-top: 0;
+        }
+
+        .mini-mode .primary-timer {
+            font-size: 34px;
+            font-weight: 200;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.15;
+        }
+
+        .mini-mode .primary-card.idle .primary-timer {
+            font-size: 12px;
+            font-weight: 400;
+            color: rgba(255,255,255,0.35);
+            margin-top: 2px;
+        }
+
+        .mini-mode .primary-controls { display: none; }
+
+        .mini-mode .quick-tasks {
+            padding: 8px 8px 10px;
+        }
+
+        .mini-mode .section-title { display: none; }
+
+        .mini-mode .quick-grid {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .mini-mode .quick-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.08);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            color: rgba(255,255,255,0.6);
+            font-size: 9px;
+            font-weight: 500;
+        }
+
+        .mini-mode .quick-btn:hover {
+            background: rgba(255,255,255,0.15);
+            color: #fff;
+        }
+
+        .mini-mode .quick-btn.primary-active {
+            background: rgba(0,122,255,0.3);
+            color: #fff;
+            box-shadow: 0 0 0 1.5px rgba(0,122,255,0.6);
+        }
+
+        .mini-mode .quick-btn.running.loop {
+            background: rgba(255,149,0,0.15);
+            color: #FF9500;
+        }
+
+        .mini-mode .quick-btn.primary-active.loop {
+            background: rgba(255,149,0,0.3);
+            box-shadow: 0 0 0 1.5px rgba(255,149,0,0.6);
+            color: #fff;
+        }
+
+        .mini-mode .qb-time { font-size: 10px; font-weight: 600; line-height: 1; }
+        .mini-mode .qb-label { display: none; }
+
+        .mini-mode .qb-ring {
+            position: absolute;
+            inset: -2px;
+            pointer-events: none;
+        }
+
+        .mini-mode .qb-ring svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .mini-mode .qb-ring circle {
+            fill: none;
+            stroke-width: 2;
+        }
+
+        .mini-mode .qb-ring .ring-bg { stroke: rgba(255,255,255,0.08); }
+        .mini-mode .qb-ring .ring-fg { stroke: #007AFF; stroke-linecap: round; }
+        .mini-mode .quick-btn.running.loop .qb-ring .ring-fg { stroke: #FF9500; }
+
+        .mini-mode .task-list-section,
+        .mini-mode .bottom-bar { display: none; }
+
+        .multi-dot {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background: #FF3B30;
+            border-radius: 50%;
+            border: 1.5px solid rgba(25,25,30,0.88);
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-label">MMY-TaskTime 双模式预览 · 多任务并行</div>
+    <div class="mode-hint">
+        <b>多任务并行</b>：主任务大倒计时显示 + 后台任务在按钮上显示进度环<br>
+        点击按钮启动/切换 · 点击 ↙/↗ 切换精简/完整模式 · 拖拽顶栏移动
+    </div>
+
+    <div class="app-container full-mode" id="app">
+        <div class="drag-handle">
+            <button class="mode-toggle" id="modeToggle" title="切换精简模式">↙</button>
+        </div>
+
+        <div class="clock-section">
+            <div class="clock" id="clock">09:30:00</div>
+            <div class="clock-sub">专注工作 · 心流时刻</div>
+        </div>
+
+        <div class="running-tasks-bar" id="runningBar">
+            <div class="running-chip primary">
+                <span class="chip-dot"></span>
+                主任务跟进 · 24:18
+            </div>
+            <div class="running-chip loop">
+                <span class="chip-dot"></span>
+                喝水 · 32:05
+            </div>
+            <div class="running-chip loop">
+                <span class="chip-dot"></span>
+                Agent · 06:33
+            </div>
+        </div>
+
+        <div class="primary-task" id="primaryTask">
+            <div class="primary-card loop" id="primaryCard">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="primary-name" id="primaryName">主任务跟进</div>
+                <div class="primary-timer" id="primaryTimer">24:18</div>
+                <div class="primary-controls">
+                    <button class="ctrl-btn stop" id="stopBtn">停止</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="quick-tasks">
+            <div class="section-title">常驻任务（可并行运行）</div>
+            <div class="quick-grid" id="quickGrid"></div>
+        </div>
+
+        <div class="task-list-section">
+            <div class="task-list-header">
+                <div class="section-title">自定义任务</div>
+                <button class="add-task-btn">+</button>
+            </div>
+            <div class="task-list" id="taskList"></div>
+        </div>
+
+        <div class="bottom-bar">
+            <button class="bar-btn" title="设置">⚙</button>
+            <button class="bar-btn" title="统计">📊</button>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        const QUICK_TASKS = [
+            { id: 'q5',  time: 5,  name: '外包跟进', icon: '外', loop: false, color: '#007AFF' },
+            { id: 'q10', time: 10, name: 'Agent跟进', icon: 'A', loop: true,  color: '#FF9500' },
+            { id: 'q30', time: 30, name: '主任务跟进', icon: '主', loop: false, color: '#007AFF' },
+            { id: 'q40', time: 40, name: '喝水', icon: '水', loop: true, color: '#34C759' }
+        ];
+
+        const CUSTOM_TASKS = [
+            { id: 'c1', time: 15, name: '代码审查' },
+            { id: 'c2', time: 10, name: '回复邮件' }
+        ];
+
+        let tasks = {};
+        QUICK_TASKS.forEach(t => {
+            tasks[t.id] = { ...t, remaining: 0, running: false, isPrimary: false };
+        });
+
+        tasks['q30'].running = true;
+        tasks['q30'].isPrimary = true;
+        tasks['q30'].remaining = 24 * 60 + 18;
+        tasks['q30'].total = 30 * 60;
+
+        tasks['q40'].running = true;
+        tasks['q40'].isPrimary = false;
+        tasks['q40'].remaining = 32 * 60 + 5;
+        tasks['q40'].total = 40 * 60;
+
+        tasks['q10'].running = true;
+        tasks['q10'].isPrimary = false;
+        tasks['q10'].remaining = 6 * 60 + 33;
+        tasks['q10'].total = 10 * 60;
+
+        const app = document.getElementById('app');
+        const modeToggle = document.getElementById('modeToggle');
+        let isMini = false;
+
+        function renderQuickGrid() {
+            const grid = document.getElementById('quickGrid');
+            const runningCount = Object.values(tasks).filter(t => t.running && !t.isPrimary).length;
+
+            if (isMini) {
+                grid.innerHTML = QUICK_TASKS.map(t => {
+                    const task = tasks[t.id];
+                    let pct = task.running ? ((task.total - task.remaining) / task.total) * 100 : 0;
+                    const circ = 2 * Math.PI * 15;
+                    const dash = circ * (pct / 100);
+                    const multiDot = runningCount > 0 && !task.isPrimary && task.running ? '<div class="multi-dot"></div>' : '';
+                    const ring = task.running ? `
+                        <div class="qb-ring">
+                            <svg viewBox="0 0 36 36">
+                                <circle class="ring-bg" cx="18" cy="18" r="15"/>
+                                <circle class="ring-fg" cx="18" cy="18" r="15"
+                                    stroke-dasharray="${dash} ${circ}"
+                                    style="stroke:${t.color}"/>
+                            </svg>
+                        </div>` : '';
+                    const cls = ['quick-btn'];
+                    if (task.running) cls.push('running');
+                    if (task.loop) cls.push('loop');
+                    if (task.isPrimary) cls.push('primary-active');
+                    return `<button class="${cls.join(' ')}" data-id="${t.id}">
+                        ${ring}
+                        <span class="qb-time">${t.time}</span>
+                    </button>`;
+                }).join('');
+            } else {
+                grid.innerHTML = QUICK_TASKS.map(t => {
+                    const task = tasks[t.id];
+                    let pct = task.running ? ((task.total - task.remaining) / task.total) * 100 : 0;
+                    const circ = 2 * Math.PI * 8;
+                    const dash = circ * (pct / 100);
+                    const ring = task.running ? `
+                        <div class="qb-ring">
+                            <svg viewBox="0 0 20 20">
+                                <circle class="ring-bg" cx="10" cy="10" r="8"/>
+                                <circle class="ring-fg" cx="10" cy="10" r="8"
+                                    stroke-dasharray="${dash} ${circ}"
+                                    style="stroke:${t.color}"/>
+                            </svg>
+                        </div>` : '';
+                    const cls = ['quick-btn'];
+                    if (task.running) cls.push('running');
+                    if (task.loop) cls.push('loop');
+                    if (task.isPrimary) cls.push('primary-active');
+                    return `<button class="${cls.join(' ')}" data-id="${t.id}">
+                        ${ring}
+                        <div class="qb-time">${t.time}分</div>
+                        <div class="qb-label">${t.name}</div>
+                    </button>`;
+                }).join('');
+            }
+
+            grid.querySelectorAll('.quick-btn').forEach(btn => {
+                btn.addEventListener('click', () => toggleTask(btn.dataset.id));
+            });
+        }
+
+        function renderTaskList() {
+            const list = document.getElementById('taskList');
+            const cls = isMini ? 'task-list' : 'task-list';
+            list.className = cls;
+            list.innerHTML = CUSTOM_TASKS.map(t => `
+                <div class="task-item">
+                    <button class="task-start" data-cid="${t.id}">▶</button>
+                    <div class="task-info">
+                        <div class="task-name">${t.name}</div>
+                        <div class="task-duration">${t.time}分钟</div>
+                    </div>
+                    <button class="task-delete">×</button>
+                </div>
+            `).join('');
+        }
+
+        function renderRunningBar() {
+            if (isMini) {
+                document.getElementById('runningBar').style.display = 'none';
+                return;
+            }
+            const bar = document.getElementById('runningBar');
+            const running = Object.values(tasks).filter(t => t.running);
+            if (running.length <= 1) { bar.style.display = 'none'; return; }
+            bar.style.display = 'flex';
+            bar.innerHTML = running.map(t => {
+                const m = Math.floor(t.remaining / 60);
+                const s = t.remaining % 60;
+                const cls = ['running-chip'];
+                if (t.loop) cls.push('loop');
+                if (t.isPrimary) cls.push('primary');
+                return `<div class="${cls.join(' ')}" data-id="${t.id}" style="cursor:pointer">
+                    <span class="chip-dot"></span>${t.name} · ${m}:${String(s).padStart(2,'0')}
+                </div>`;
+            }).join('');
+            bar.querySelectorAll('.running-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    const id = chip.dataset.id;
+                    setPrimary(id);
+                });
+            });
+        }
+
+        function renderPrimary() {
+            const primary = Object.values(tasks).find(t => t.isPrimary);
+            const card = document.getElementById('primaryCard');
+            const nameEl = document.getElementById('primaryName');
+            const timerEl = document.getElementById('primaryTimer');
+            const fill = document.getElementById('progressFill');
+
+            if (!primary) {
+                card.className = 'primary-card idle';
+                nameEl.textContent = 'MMY-TaskTime';
+                timerEl.textContent = isMini ? '选择任务' : '点击下方任务开始';
+                fill.style.width = '0%';
+                return;
+            }
+
+            card.className = 'primary-card' + (primary.loop ? ' loop' : '');
+            nameEl.textContent = primary.name;
+            const m = Math.floor(primary.remaining / 60);
+            const s = primary.remaining % 60;
+            timerEl.textContent = m + ':' + String(s).padStart(2, '0');
+            const pct = ((primary.total - primary.remaining) / primary.total) * 100;
+            fill.style.width = pct + '%';
+            if (primary.loop) fill.style.background = '#FF9500';
+            else fill.style.background = '#007AFF';
+        }
+
+        function setPrimary(id) {
+            Object.keys(tasks).forEach(k => tasks[k].isPrimary = false);
+            if (tasks[id] && tasks[id].running) {
+                tasks[id].isPrimary = true;
+            }
+            renderAll();
+        }
+
+        function toggleTask(id) {
+            const t = tasks[id];
+            if (t.running) {
+                if (t.isPrimary) {
+                    t.running = false;
+                    t.remaining = 0;
+                    const another = Object.values(tasks).find(x => x.running);
+                    if (another) another.isPrimary = true;
+                } else {
+                    setPrimary(id);
+                    return;
+                }
+            } else {
+                t.running = true;
+                t.remaining = t.time * 60;
+                t.total = t.time * 60;
+                const hasPrimary = Object.values(tasks).some(x => x.isPrimary && x.running);
+                t.isPrimary = !hasPrimary;
+            }
+            renderAll();
+        }
+
+        function renderAll() {
+            renderQuickGrid();
+            renderTaskList();
+            renderRunningBar();
+            renderPrimary();
+        }
+
+        function tick() {
+            Object.values(tasks).forEach(t => {
+                if (!t.running) return;
+                t.remaining--;
+                if (t.remaining <= 0) {
+                    if (t.loop) {
+                        t.remaining = t.total;
+                    } else {
+                        t.running = false;
+                        t.remaining = 0;
+                        if (t.isPrimary) {
+                            t.isPrimary = false;
+                            const next = Object.values(tasks).find(x => x.running);
+                            if (next) next.isPrimary = true;
+                        }
+                    }
+                }
+            });
+            renderPrimary();
+            renderQuickGrid();
+            renderRunningBar();
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2,'0');
+            const m = String(now.getMinutes()).padStart(2,'0');
+            const s = String(now.getSeconds()).padStart(2,'0');
+            document.getElementById('clock').textContent = h + ':' + m + ':' + s;
+        }
+
+        modeToggle.addEventListener('click', function(e) {
+            e.stopPropagation();
+            isMini = !isMini;
+            app.classList.toggle('full-mode', !isMini);
+            app.classList.toggle('mini-mode', isMini);
+            modeToggle.textContent = isMini ? '↗' : '↙';
+            modeToggle.title = isMini ? '展开完整模式' : '切换精简模式';
+            if (isMini) {
+                app.style.top = '28px';
+                app.style.left = 'auto';
+                app.style.right = '28px';
+                app.style.transform = 'none';
+            } else {
+                app.style.top = '50%';
+                app.style.left = '50%';
+                app.style.right = 'auto';
+                app.style.transform = 'translate(-50%, -50%)';
+            }
+            renderAll();
+        });
+
+        const dh = document.querySelector('.drag-handle');
+        let dragging = false, ox = 0, oy = 0;
+
+        dh.addEventListener('mousedown', e => {
+            if (e.target === modeToggle) return;
+            dragging = true;
+            const r = app.getBoundingClientRect();
+            ox = e.clientX - r.left;
+            oy = e.clientY - r.top;
+            app.style.left = r.left + 'px';
+            app.style.top = r.top + 'px';
+            app.style.right = 'auto';
+            if (!isMini) app.style.transform = 'none';
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', e => {
+            if (!dragging) return;
+            let nl = e.clientX - ox, nt = e.clientY - oy;
+            nl = Math.max(0, Math.min(nl, window.innerWidth - app.offsetWidth));
+            nt = Math.max(0, Math.min(nt, window.innerHeight - app.offsetHeight));
+            app.style.left = nl + 'px';
+            app.style.top = nt + 'px';
+        });
+        document.addEventListener('mouseup', () => dragging = false);
+
+        document.getElementById('stopBtn').addEventListener('click', () => {
+            const primary = Object.values(tasks).find(t => t.isPrimary);
+            if (primary) toggleTask(primary.id);
+        });
+
+        updateClock();
+        setInterval(updateClock, 1000);
+        setInterval(tick, 1000);
+        renderAll();
+    })();
+    </script>
+</body>
+</html>

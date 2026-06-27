@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MMY-TaskTime 极简任务计时器</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container" id="app">
+        <div class="drag-handle"></div>
+
+        <div class="clock-section">
+            <div class="clock" id="clock">00:00:00</div>
+            <div class="clock-sub">专注工作，心流时刻</div>
+        </div>
+
+        <div class="active-task" id="activeTask">
+            <div class="active-task-card">
+                <div class="progress-bar" id="progressBar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="active-task-name" id="activeTaskName"></div>
+                <div class="active-timer" id="activeTimer">00:00</div>
+                <div class="active-task-status" id="activeTaskStatus"></div>
+                <div class="active-task-controls" id="activeTaskControls">
+                    <button class="stop-btn" id="stopBtn">停止</button>
+                </div>
+                <div class="active-task-completed" id="activeTaskCompleted">
+                    <div class="completed-text">✓ 已完成</div>
+                    <button class="restart-btn" id="restartBtn">再次开始</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="quick-tasks">
+            <div class="section-title">常驻任务</div>
+            <div class="quick-grid" id="quickGrid">
+            </div>
+        </div>
+
+        <div class="task-list-section">
+            <div class="task-list-header">
+                <div class="section-title task-list-title">任务列表</div>
+                <button class="add-task-btn" id="addTaskBtn">+</button>
+            </div>
+            <div class="add-task-form" id="addTaskForm">
+                <input type="text" id="taskNameInput" placeholder="任务名称" maxlength="20">
+                <div class="form-row">
+                    <input type="number" id="taskTimeInput" placeholder="时长(分钟)" min="1" max="180">
+                    <label class="loop-checkbox">
+                        <input type="checkbox" id="taskLoopInput">
+                        <span>循环</span>
+                    </label>
+                    <button class="form-btn cancel" id="cancelAddBtn">取消</button>
+                    <button class="form-btn confirm" id="confirmAddBtn">添加</button>
+                </div>
+            </div>
+            <div class="task-list" id="taskList">
+            </div>
+        </div>
+
+        <div class="bottom-bar">
+            <button class="bar-btn" id="settingsBtn" title="设置">⚙</button>
+            <button class="bar-btn" id="statsBtn" title="统计">📊</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">设置</div>
+                <button class="modal-close" data-modal="settingsModal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-item">
+                    <div>
+                        <div class="setting-label">上下班打卡提醒</div>
+                        <div class="setting-desc">上下班时间提醒</div>
+                    </div>
+                    <div class="toggle on" id="clockReminderToggle"></div>
+                </div>
+                <div class="setting-item">
+                    <div>
+                        <div class="setting-label">上班时间</div>
+                    </div>
+                    <input type="time" class="time-input" id="startTimeInput" value="09:30">
+                </div>
+                <div class="setting-item">
+                    <div>
+                        <div class="setting-label">下班时间</div>
+                    </div>
+                    <input type="time" class="time-input" id="endTimeInput" value="19:30">
+                </div>
+                <div class="setting-item">
+                    <div>
+                        <div class="setting-label">声音提醒</div>
+                        <div class="setting-desc">计时结束播放提示音</div>
+                    </div>
+                    <div class="toggle on" id="soundToggle"></div>
+                </div>
+                <div class="setting-item">
+                    <div>
+                        <div class="setting-label">桌面通知</div>
+                        <div class="setting-desc">显示浏览器通知</div>
+                    </div>
+                    <div class="toggle on" id="notificationToggle"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="statsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">数据统计</div>
+                <button class="modal-close" data-modal="statsModal">×</button>
+            </div>
+            <div class="modal-body" id="statsContent">
+                <div class="stat-card">
+                    <div class="stat-value" id="todayDuration">0m</div>
+                    <div class="stat-label">今日专注时长</div>
+                </div>
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="todayCount">0</div>
+                        <div class="stat-label">完成任务</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="weekDuration">0m</div>
+                        <div class="stat-label">本周专注</div>
+                    </div>
+                </div>
+                <div class="stats-detail" id="statsDetail"></div>
+                <button class="export-btn" id="exportBtn">导出 HTML 报告</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
