@@ -403,7 +403,6 @@ fn main() {
                 tray_builder = tray_builder.icon(icon);
             }
 
-            let state_for_menu = app.state::<AppState>();
             let tray = tray_builder
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "toggle" => {
@@ -464,7 +463,8 @@ fn main() {
                     }
                     "autostart" => {
                         let autostart_manager = app.autolaunch();
-                        let mut is_enabled = state_for_menu.autostart_enabled.lock().unwrap();
+                        let mut state = app.state::<AppState>();
+                        let mut is_enabled = state.autostart_enabled.lock().unwrap();
                         *is_enabled = !*is_enabled;
                         if *is_enabled {
                             let _ = autostart_manager.enable();

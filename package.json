@@ -5,8 +5,8 @@
   "private": true,
   "scripts": {
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "dev": "set \"PATH=C:\\Users\\EDY\\.cargo\\bin;%PATH%\" && tauri dev",
+    "build": "set \"PATH=C:\\Users\\EDY\\.cargo\\bin;%PATH%\" && tauri build"
   },
   "repository": {
     "type": "git",
