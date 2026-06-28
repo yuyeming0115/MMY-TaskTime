@@ -872,8 +872,7 @@
         if (isTauri) {
             try {
                 await invoke('set_always_on_top', { alwaysOnTop: data.settings.alwaysOnTop });
-                const appHeight = app.offsetHeight;
-                await invoke('set_window_size', { width: 156, height: appHeight > 0 ? appHeight : 200 });
+                await invoke('set_window_size', { width: 176, height: 230 });
                 await invoke('set_skip_taskbar', { skip: true });
                 isSnapped = await invoke('is_snapped');
             } catch (e) {
@@ -917,7 +916,7 @@
         if (isTauri) {
             try {
                 await invoke('set_always_on_top', { alwaysOnTop: false });
-                await invoke('set_window_size', { width: 360, height: 600 });
+                await invoke('set_window_size', { width: 380, height: 560 });
                 await invoke('set_skip_taskbar', { skip: false });
             } catch (e) {
                 console.error('Failed to switch to full mode in Tauri:', e);

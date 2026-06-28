@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, State, Window, WindowEvent, LogicalPosition, Position, Emitter,
+    Manager, State, Window, WindowEvent, LogicalPosition, Position, Emitter, LogicalSize, Size,
 };
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState, GlobalShortcutExt};
@@ -27,6 +27,7 @@ struct SnapState {
 struct AppState {
     snap: Mutex<SnapState>,
     autostart_enabled: Mutex<bool>,
+    frame_diff: Mutex<(f64, f64)>,
 }
 
 #[tauri::command]
@@ -35,9 +36,11 @@ fn set_always_on_top(window: Window, always_on_top: bool) -> Result<(), String> 
 }
 
 #[tauri::command]
-fn set_window_size(window: Window, width: i32, height: i32) -> Result<(), String> {
-    use tauri::LogicalSize;
-    window.set_size(tauri::Size::Logical(LogicalSize { width: width as f64, height: height as f64 }))
+fn set_window_size(window: Window, width: i32, height: i32, state: State<AppState>) -> Result<(), String> {
+    let (dw, dh) = *state.frame_diff.lock().unwrap();
+    let w = width as f64 + dw;
+    let h = height as f64 + dh;
+    window.set_size(Size::Logical(LogicalSize { width: w, height: h }))
         .map_err(|e| e.to_string())
 }
 
@@ -349,9 +352,23 @@ fn main() {
                 restore_position: None,
             }),
             autostart_enabled: Mutex::new(false),
+            frame_diff: Mutex::new((0.0, 0.0)),
         })
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
+
+            {
+                let state = app.state::<AppState>();
+                if let (Ok(inner), Ok(outer), Ok(scale)) = (
+                    window.inner_size(),
+                    window.outer_size(),
+                    window.scale_factor(),
+                ) {
+                    let il = inner.to_logical::<f64>(scale);
+                    let ol = outer.to_logical::<f64>(scale);
+                    *state.frame_diff.lock().unwrap() = (ol.width - il.width, ol.height - il.height);
+                }
+            }
 
             let toggle_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyT);
             let mode_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyM);
@@ -463,7 +480,7 @@ fn main() {
                     }
                     "autostart" => {
                         let autostart_manager = app.autolaunch();
-                        let mut state = app.state::<AppState>();
+                        let state = app.state::<AppState>();
                         let mut is_enabled = state.autostart_enabled.lock().unwrap();
                         *is_enabled = !*is_enabled;
                         if *is_enabled {
