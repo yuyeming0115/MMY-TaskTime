@@ -679,7 +679,7 @@ body::before {
 
 /* ====== MINI MODE ====== */
 .app-container.mini-mode {
-    width: 156px;
+    width: 176px;
     background: rgba(25, 25, 30, 0.88);
     border-radius: 16px;
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
@@ -695,7 +695,7 @@ body::before {
 }
 
 .app-container.mini-mode.idle {
-    width: 120px;
+    width: 132px;
 }
 
 .mini-mode .drag-handle {
@@ -740,17 +740,165 @@ body::before {
     color: #fff;
 }
 
+.mini-mode .focus-panel {
+    margin: 8px 6px 4px;
+    min-height: 82px;
+    display: grid;
+    grid-template-columns: 72px 1px minmax(0, 1fr);
+    align-items: stretch;
+    background: rgba(18, 19, 26, 0.58);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.mini-mode .focus-divider {
+    width: 1px;
+    align-self: stretch;
+    background: rgba(255,255,255,0.06);
+}
+
+.mini-mode.idle .focus-panel {
+    grid-template-columns: 58px 1px minmax(0, 1fr);
+    min-height: 74px;
+}
+
 .mini-mode .clock-section {
-    padding: 2px 12px 0;
+    padding: 6px 4px;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
 }
 
 .mini-mode .analog-clock {
-    display: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.mini-mode .analog-face {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 50% 50%, #2b303b 0 58%, #20242e 59% 100%);
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow:
+        inset 0 1px 3px rgba(255,255,255,0.12),
+        inset 0 -5px 12px rgba(0,0,0,0.22),
+        0 4px 10px rgba(0,0,0,0.28);
+}
+
+.mini-mode .analog-face::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.05);
+}
+
+.mini-mode .clock-num {
+    position: absolute;
+    color: #8fa4bd;
+    font-size: 6px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.mini-mode .n12 { top: 5px; left: 50%; transform: translateX(-50%); }
+.mini-mode .n3 { right: 6px; top: 50%; transform: translateY(-50%); }
+.mini-mode .n6 { bottom: 5px; left: 50%; transform: translateX(-50%); }
+.mini-mode .n9 { left: 6px; top: 50%; transform: translateY(-50%); }
+
+.mini-mode .clock-tick {
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    width: 1px;
+    height: 3px;
+    background: rgba(160, 174, 190, 0.7);
+    transform-origin: 50% 19px;
+}
+
+.mini-mode .t1 { transform: translateX(-50%) rotate(30deg); }
+.mini-mode .t2 { transform: translateX(-50%) rotate(60deg); }
+.mini-mode .t4 { transform: translateX(-50%) rotate(120deg); }
+.mini-mode .t5 { transform: translateX(-50%) rotate(150deg); }
+.mini-mode .t7 { transform: translateX(-50%) rotate(210deg); }
+.mini-mode .t8 { transform: translateX(-50%) rotate(240deg); }
+.mini-mode .t10 { transform: translateX(-50%) rotate(300deg); }
+.mini-mode .t11 { transform: translateX(-50%) rotate(330deg); }
+
+.mini-mode .clock-hand {
+    position: absolute;
+    left: 50%;
+    bottom: 50%;
+    border-radius: 999px;
+    transform-origin: 50% 100%;
+    transform: translateX(-50%) rotate(0deg);
+}
+
+.mini-mode .hour-hand {
+    width: 2px;
+    height: 12px;
+    background: #8b96a5;
+}
+
+.mini-mode .minute-hand {
+    width: 2px;
+    height: 17px;
+    background: #dce5ef;
+}
+
+.mini-mode .second-hand {
+    width: 1px;
+    height: 20px;
+    background: #ff453a;
+}
+
+.mini-mode .second-hand::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    width: 1px;
+    height: 7px;
+    background: #ff453a;
+    transform: translateX(-50%);
+    border-radius: 999px;
+}
+
+.mini-mode .clock-pin {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #ff453a;
+    border: 1px solid #f4f4f5;
+    transform: translate(-50%, -50%);
+}
+
+.mini-mode .analog-date {
+    color: rgba(255,255,255,0.58);
+    font-size: 8px;
+    line-height: 1;
+    min-height: 8px;
+    max-width: 64px;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .mini-mode .clock-row {
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     gap: 5px;
@@ -772,39 +920,65 @@ body::before {
     font-size: 18px;
 }
 
-.mini-mode .clock-sub { display: none; }
+.mini-mode .clock-sub {
+    display: block;
+    color: rgba(255,255,255,0.44);
+    font-size: 7px;
+    line-height: 1;
+    margin-top: 1px;
+    max-width: 68px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+}
 
 .mini-mode .running-tasks-bar { display: none; }
 
 .mini-mode .primary-task {
-    padding: 4px 10px 0;
+    padding: 0;
+    min-width: 0;
+    display: flex;
+    align-items: stretch;
 }
 
 .mini-mode .primary-card {
+    width: 100%;
+    min-height: 100%;
     text-align: center;
     position: relative;
-    padding-bottom: 6px;
+    padding: 11px 5px 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.03);
 }
 
 .mini-mode .primary-card.idle {
-    padding: 6px 0 4px;
+    padding: 10px 4px;
+    background: transparent;
 }
 
 .mini-mode .progress-bar {
-    height: 2px;
-    background: rgba(255,255,255,0.06);
-    border-radius: 1px;
-    margin: 0 2px;
+    position: absolute;
+    inset: 0;
+    height: auto;
+    background: transparent;
+    border-radius: 0;
+    margin: 0;
     overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
 }
 
 .mini-mode .progress-fill {
     height: 100%;
     background: #007AFF;
-    border-radius: 1px;
+    border-radius: 0;
     width: 0%;
     transition: width 1s linear;
-    opacity: 1;
+    opacity: 0.22;
 }
 
 .mini-mode .primary-card.loop .progress-fill { background: #FF9500; }
@@ -812,9 +986,12 @@ body::before {
 .mini-mode .primary-card.idle .progress-bar { display: none; }
 
 .mini-mode .primary-name {
-    font-size: 10px;
-    color: rgba(255,255,255,0.45);
-    margin-top: 5px;
+    position: relative;
+    z-index: 1;
+    font-size: 9px;
+    color: rgba(255,255,255,0.52);
+    margin: 0 0 4px;
+    max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -822,29 +999,60 @@ body::before {
 
 .mini-mode .primary-card.idle .primary-name {
     color: rgba(255,255,255,0.3);
-    font-size: 11px;
-    margin-top: 0;
+    font-size: 9px;
+    margin: 0 0 4px;
 }
 
 .mini-mode .primary-timer {
-    font-size: 34px;
+    position: relative;
+    z-index: 1;
+    font-size: 25px;
     font-weight: 200;
     color: #fff;
     font-variant-numeric: tabular-nums;
-    line-height: 1.15;
+    line-height: 1;
+    max-width: 100%;
+    white-space: nowrap;
 }
 
 .mini-mode .primary-card.idle .primary-timer {
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 400;
     color: rgba(255,255,255,0.35);
-    margin-top: 2px;
+    margin-top: 0;
 }
 
-.mini-mode .primary-controls { display: none; }
+.mini-mode .primary-controls {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+    margin-top: 7px;
+}
+
+.mini-mode .primary-card.idle .primary-controls { display: none; }
+
+.mini-mode .ctrl-btn {
+    border: none;
+    border-radius: 5px;
+    padding: 4px 10px;
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.mini-mode .ctrl-btn.stop {
+    background: #ff453a;
+    color: #fff;
+}
+
+.mini-mode .ctrl-btn.stop:hover {
+    background: #d63027;
+}
 
 .mini-mode .quick-tasks {
-    padding: 8px 8px 10px;
+    padding: 8px 10px 10px;
 }
 
 .mini-mode .section-title { display: none; }
@@ -1318,6 +1526,54 @@ body.theme-light .mini-mode .mode-toggle:hover {
     color: #1a1a1a;
 }
 
+body.theme-light .mini-mode .focus-panel {
+    background: rgba(255,255,255,0.72);
+    border-color: rgba(0,0,0,0.08);
+}
+
+body.theme-light .mini-mode .focus-divider {
+    background: rgba(0,0,0,0.08);
+}
+
+body.theme-light .mini-mode .analog-face {
+    background:
+        radial-gradient(circle at 50% 50%, #f9fbff 0 58%, #eef4fb 59% 100%);
+    border-color: rgba(0,0,0,0.12);
+    box-shadow:
+        inset 0 1px 3px rgba(255,255,255,0.8),
+        inset 0 -5px 12px rgba(70, 90, 110, 0.12),
+        0 4px 10px rgba(60, 90, 130, 0.12);
+}
+
+body.theme-light .mini-mode .analog-face::before {
+    border-color: rgba(70, 90, 110, 0.08);
+}
+
+body.theme-light .mini-mode .clock-num,
+body.theme-light .mini-mode .analog-date {
+    color: #7f8b97;
+}
+
+body.theme-light .mini-mode .clock-tick {
+    background: #b8c2cc;
+}
+
+body.theme-light .mini-mode .hour-hand {
+    background: #5a6674;
+}
+
+body.theme-light .mini-mode .minute-hand {
+    background: #2f3b49;
+}
+
+body.theme-light .mini-mode .clock-pin {
+    border-color: #fff;
+}
+
+body.theme-light .mini-mode .clock-sub {
+    color: rgba(0,0,0,0.44);
+}
+
 body.theme-light .mini-mode .clock-icon {
     background: rgba(0,0,0,0.06);
 }
@@ -1339,8 +1595,16 @@ body.theme-light .mini-mode .primary-card.idle .primary-timer {
     color: rgba(0,0,0,0.45);
 }
 
+body.theme-light .mini-mode .primary-card {
+    background: rgba(0,0,0,0.03);
+}
+
+body.theme-light .mini-mode .primary-card.idle {
+    background: transparent;
+}
+
 body.theme-light .mini-mode .progress-bar {
-    background: rgba(0,0,0,0.08);
+    background: transparent;
 }
 
 body.theme-light .mini-mode .quick-btn {
