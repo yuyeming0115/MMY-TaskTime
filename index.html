@@ -13,12 +13,37 @@
             <button class="window-close-btn" id="windowCloseBtn" title="隐藏到托盘" style="display: none;">×</button>
         </div>
 
+        <div class="focus-panel">
         <div class="clock-section">
-            <div class="clock" id="clock">00:00:00</div>
+            <div class="analog-clock" aria-hidden="true">
+                <div class="analog-face">
+                    <span class="clock-num n12">12</span>
+                    <span class="clock-num n3">3</span>
+                    <span class="clock-num n6">6</span>
+                    <span class="clock-num n9">9</span>
+                    <span class="clock-tick t1"></span>
+                    <span class="clock-tick t2"></span>
+                    <span class="clock-tick t4"></span>
+                    <span class="clock-tick t5"></span>
+                    <span class="clock-tick t7"></span>
+                    <span class="clock-tick t8"></span>
+                    <span class="clock-tick t10"></span>
+                    <span class="clock-tick t11"></span>
+                    <span class="clock-hand hour-hand" id="hourHand"></span>
+                    <span class="clock-hand minute-hand" id="minuteHand"></span>
+                    <span class="clock-hand second-hand" id="secondHand"></span>
+                    <span class="clock-pin"></span>
+                </div>
+                <div class="analog-date" id="analogDate">--</div>
+            </div>
+            <div class="clock-row">
+                <span class="clock-icon" aria-hidden="true">🕙</span>
+                <div class="clock" id="clock">00:00:00</div>
+            </div>
             <div class="clock-sub">专注工作 · 心流时刻</div>
         </div>
 
-        <div class="running-tasks-bar" id="runningBar"></div>
+        <div class="focus-divider" aria-hidden="true"></div>
 
         <div class="primary-task" id="primaryTask">
             <div class="primary-card idle" id="primaryCard">
@@ -32,16 +57,19 @@
                 </div>
             </div>
         </div>
+        </div>
+
+        <div class="running-tasks-bar" id="runningBar"></div>
 
         <div class="quick-tasks">
             <div class="section-title">常驻任务（可并行运行）</div>
             <div class="quick-grid" id="quickGrid"></div>
+            <div class="mini-next-task" id="miniNextTask"></div>
         </div>
 
         <div class="task-list-section">
             <div class="task-list-header">
                 <div class="section-title">自定义任务</div>
-                <button class="add-task-btn" id="addTaskBtn" title="添加自定义任务">+</button>
             </div>
             <div class="task-list" id="taskList"></div>
         </div>
@@ -63,6 +91,8 @@
 
         <div class="bottom-bar">
             <button class="bar-btn" id="settingsBtn" title="设置">⚙</button>
+            <button class="bar-btn add-task-btn" id="addTaskBtn" title="添加自定义任务">+</button>
+            <button class="bar-btn" id="themeToggleBtn" title="黑白模式">◐</button>
             <button class="bar-btn" id="statsBtn" title="统计">📊</button>
         </div>
     </div>
@@ -102,6 +132,14 @@
                         <input type="checkbox" id="notificationToggle">
                         <span class="toggle-slider"></span>
                     </label>
+                </div>
+                <div class="quick-settings">
+                    <div class="quick-settings-title">常驻任务</div>
+                    <div class="quick-settings-list" id="quickTaskSettings"></div>
+                    <div class="quick-settings-actions">
+                        <button class="form-btn form-btn-cancel" id="resetQuickTasksBtn">恢复默认</button>
+                        <button class="form-btn form-btn-confirm" id="saveQuickTasksBtn">保存常驻任务</button>
+                    </div>
                 </div>
                 <div class="setting-row" id="autostartRow" style="display: none;">
                     <span>开机自启动</span>

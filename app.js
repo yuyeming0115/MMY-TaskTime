@@ -11,12 +11,13 @@
         appWindow = winApi.getCurrent ? winApi.getCurrent() : (winApi.getCurrentWindow ? winApi.getCurrentWindow() : null);
     }
 
-    const QUICK_TASKS = [
+    const DEFAULT_QUICK_TASKS = [
         { id: 'q5', time: 5, name: '外包跟进反馈', loop: false, color: '#007AFF', type: 'normal' },
         { id: 'q10', time: 10, name: 'Agent跟进', loop: true, color: '#FF9500', type: 'loop' },
         { id: 'q30', time: 30, name: '主任务跟进', loop: false, color: '#007AFF', type: 'normal' },
         { id: 'q40', time: 40, name: '间隔喝水', loop: true, color: '#34C759', type: 'water' }
     ];
+    let QUICK_TASKS = DEFAULT_QUICK_TASKS.map(t => ({ ...t }));
 
     const DEFAULT_SETTINGS = {
         clockReminder: true,
@@ -25,10 +26,16 @@
         soundEnabled: true,
         notificationEnabled: true,
         autostartEnabled: false,
-        alwaysOnTop: true
+        alwaysOnTop: true,
+        themeMode: 'light'
     };
 
+    const RUNTIME_KEY = 'mmy_tasktime_runtime';
+    const FULL_DEFAULT_SIZE = { width: 350, height: 600 };
+    const MINI_SIZE = { width: 176, idleHeight: 150, runningHeight: 230 };
+
     let data = {
+        quickTasks: QUICK_TASKS.map(t => ({ id: t.id, name: t.name, time: t.time, loop: t.loop })),
         customTasks: [],
         settings: { ...DEFAULT_SETTINGS },
         stats: {}
@@ -41,10 +48,13 @@
     let audioCtx = null;
     let isSnapped = false;
     let snapHideTimer = null;
+    let lastFullSize = { ...FULL_DEFAULT_SIZE };
 
     function init() {
         load();
         initTasks();
+        restoreRuntimeState();
+        applyTheme();
         bindEvents();
         initNotification();
         updateClock();
@@ -118,6 +128,23 @@
             }
         }
 
+        try {
+            const runtime = JSON.parse(localStorage.getItem(RUNTIME_KEY) || '{}');
+            if (runtime.isMini) {
+                await switchToMini();
+            } else {
+                await invoke('set_window_resizable', { resizable: true });
+                const size = await invoke('get_window_size');
+                const width = Array.isArray(size) ? size[0] : size.width;
+                const height = Array.isArray(size) ? size[1] : size.height;
+                if (width < 300 || height < 300) {
+                    await invoke('set_window_size', FULL_DEFAULT_SIZE);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to restore window mode:', e);
+        }
+
         initEdgeSnap();
     }
 
@@ -175,13 +202,37 @@
             const stored = localStorage.getItem(STORAGE_KEY);
             if (stored) {
                 const parsed = JSON.parse(stored);
+                data.quickTasks = normalizeQuickTasks(parsed.quickTasks);
                 data.customTasks = parsed.customTasks || [];
                 data.settings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
                 data.stats = parsed.stats || {};
             }
+            QUICK_TASKS = normalizeQuickTasks(data.quickTasks);
+            data.quickTasks = QUICK_TASKS.map(t => ({ id: t.id, name: t.name, time: t.time, loop: t.loop }));
         } catch (e) {
             console.error('Load error:', e);
         }
+    }
+
+    function normalizeQuickTasks(source) {
+        const saved = Array.isArray(source) ? source : [];
+        return DEFAULT_QUICK_TASKS.map(defaultTask => {
+            const custom = saved.find(t => t && t.id === defaultTask.id) || {};
+            const time = Math.max(1, Math.min(180, parseInt(custom.time, 10) || defaultTask.time));
+            const name = String(custom.name || defaultTask.name).trim().slice(0, 20) || defaultTask.name;
+            const loop = typeof custom.loop === 'boolean' ? custom.loop : defaultTask.loop;
+            const type = defaultTask.type === 'water' ? 'water' : (loop ? 'loop' : 'normal');
+            const color = defaultTask.type === 'water' ? '#34C759' : (loop ? '#FF9500' : '#007AFF');
+
+            return {
+                ...defaultTask,
+                name,
+                time,
+                loop,
+                type,
+                color
+            };
+        });
     }
 
     function save() {
@@ -189,6 +240,70 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch (e) {
             console.error('Save error:', e);
+        }
+    }
+
+    function saveRuntimeState() {
+        try {
+            const now = Date.now();
+            const taskState = {};
+            getAllTasks().forEach(t => {
+                taskState[t.id] = {
+                    running: t.running,
+                    remaining: t.remaining,
+                    isPrimary: t.isPrimary
+                };
+            });
+            localStorage.setItem(RUNTIME_KEY, JSON.stringify({
+                updatedAt: now,
+                isMini,
+                lastFullSize,
+                tasks: taskState
+            }));
+        } catch (e) {
+            console.error('Runtime save error:', e);
+        }
+    }
+
+    function restoreRuntimeState() {
+        try {
+            const stored = localStorage.getItem(RUNTIME_KEY);
+            if (!stored) return;
+
+            const parsed = JSON.parse(stored);
+            const elapsed = Math.max(0, Math.floor((Date.now() - (parsed.updatedAt || Date.now())) / 1000));
+
+            if (parsed.lastFullSize) {
+                const savedWidth = parsed.lastFullSize.width || FULL_DEFAULT_SIZE.width;
+                const savedHeight = parsed.lastFullSize.height || FULL_DEFAULT_SIZE.height;
+                const isOldDefaultSize = savedWidth === 430 && savedHeight === 640;
+                lastFullSize = {
+                    width: isOldDefaultSize ? FULL_DEFAULT_SIZE.width : Math.max(savedWidth, FULL_DEFAULT_SIZE.width),
+                    height: isOldDefaultSize ? FULL_DEFAULT_SIZE.height : Math.max(savedHeight, 480)
+                };
+            }
+
+            Object.entries(parsed.tasks || {}).forEach(([id, state]) => {
+                const task = tasks[id];
+                if (!task || !state.running) return;
+
+                let remaining = (state.remaining || task.total) - elapsed;
+                if (task.loop && remaining <= 0) {
+                    remaining = task.total - (Math.abs(remaining) % task.total);
+                }
+                if (remaining <= 0) return;
+
+                task.running = true;
+                task.remaining = remaining;
+                task.isPrimary = !!state.isPrimary;
+            });
+
+            const running = getAllTasks().filter(t => t.running);
+            if (running.length && !running.some(t => t.isPrimary)) {
+                running[0].isPrimary = true;
+            }
+        } catch (e) {
+            console.error('Runtime restore error:', e);
         }
     }
 
@@ -204,20 +319,24 @@
             };
         });
         data.customTasks.forEach(t => {
-            tasks[t.id] = {
-                id: t.id,
-                name: t.name,
-                time: t.duration,
-                loop: t.isLoop,
-                color: t.isLoop ? '#FF9500' : '#007AFF',
-                type: t.isLoop ? 'loop' : 'normal',
-                isCustom: true,
-                remaining: 0,
-                total: t.duration * 60,
-                running: false,
-                isPrimary: false
-            };
+            tasks[t.id] = createCustomTaskState(t);
         });
+    }
+
+    function createCustomTaskState(t) {
+        return {
+            id: t.id,
+            name: t.name,
+            time: t.duration,
+            loop: t.isLoop,
+            color: t.isLoop ? '#FF9500' : '#007AFF',
+            type: t.isLoop ? 'loop' : 'normal',
+            isCustom: true,
+            remaining: 0,
+            total: t.duration * 60,
+            running: false,
+            isPrimary: false
+        };
     }
 
     function initNotification() {
@@ -292,11 +411,21 @@
         return getAllTasks().find(t => t.isPrimary && t.running);
     }
 
+    function getNextDueTask(preferBackground) {
+        const running = getAllTasks().filter(t => t.running);
+        if (!running.length) return null;
+
+        const background = preferBackground ? running.filter(t => !t.isPrimary) : [];
+        const pool = background.length ? background : running;
+        return pool.slice().sort((a, b) => a.remaining - b.remaining)[0];
+    }
+
     function setPrimary(id) {
         Object.keys(tasks).forEach(k => tasks[k].isPrimary = false);
         if (tasks[id] && tasks[id].running) {
             tasks[id].isPrimary = true;
         }
+        saveRuntimeState();
         renderAll();
     }
 
@@ -322,6 +451,7 @@
         t.remaining = t.total;
         const hasPrimary = getAllTasks().some(x => x.isPrimary && x.running);
         t.isPrimary = !hasPrimary;
+        saveRuntimeState();
         renderAll();
         updateTrayTooltip();
     }
@@ -337,6 +467,7 @@
             const next = getAllTasks().find(x => x.running);
             if (next) next.isPrimary = true;
         }
+        saveRuntimeState();
         renderAll();
         updateTrayTooltip();
     }
@@ -379,8 +510,10 @@
             playDing();
             showNotification('任务完成', needNotify.name + ' 时间到！');
         }
+        saveRuntimeState();
         renderPrimary();
         renderQuickGrid();
+        renderMiniNextTask();
         renderRunningBar();
         updateTrayTooltip();
     }
@@ -402,6 +535,25 @@
         const m = String(now.getMinutes()).padStart(2, '0');
         const s = String(now.getSeconds()).padStart(2, '0');
         document.getElementById('clock').textContent = h + ':' + m + ':' + s;
+
+        const seconds = now.getSeconds();
+        const minutes = now.getMinutes() + seconds / 60;
+        const hours = (now.getHours() % 12) + minutes / 60;
+        const hourHand = document.getElementById('hourHand');
+        const minuteHand = document.getElementById('minuteHand');
+        const secondHand = document.getElementById('secondHand');
+        const analogDate = document.getElementById('analogDate');
+
+        if (hourHand) hourHand.style.transform = `translateX(-50%) rotate(${hours * 30}deg)`;
+        if (minuteHand) minuteHand.style.transform = `translateX(-50%) rotate(${minutes * 6}deg)`;
+        if (secondHand) secondHand.style.transform = `translateX(-50%) rotate(${seconds * 6}deg)`;
+        if (analogDate) {
+            analogDate.textContent = now.toLocaleDateString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                weekday: 'short'
+            });
+        }
     }
 
     function formatTime(seconds) {
@@ -416,12 +568,43 @@
         return '';
     }
 
+    function applyTheme() {
+        const mode = data.settings.themeMode === 'dark' ? 'dark' : 'light';
+        document.body.classList.toggle('theme-dark', mode === 'dark');
+        document.body.classList.toggle('theme-light', mode !== 'dark');
+
+        const btn = document.getElementById('themeToggleBtn');
+        if (btn) {
+            btn.textContent = mode === 'dark' ? '◑' : '◐';
+            btn.title = mode === 'dark' ? '切换浅色模式' : '切换深色模式';
+        }
+    }
+
+    function toggleTheme() {
+        data.settings.themeMode = data.settings.themeMode === 'dark' ? 'light' : 'dark';
+        applyTheme();
+        save();
+    }
+
     function renderAll() {
         renderQuickGrid();
         renderTaskList();
         renderRunningBar();
         renderPrimary();
         updateIdleClass();
+        renderMiniNextTask();
+        scheduleMiniResize();
+    }
+
+    let miniResizeTimer = null;
+    function scheduleMiniResize() {
+        if (!isTauri || !isMini) return;
+        if (miniResizeTimer) clearTimeout(miniResizeTimer);
+        const doResize = () => {
+            invoke('set_window_size', { width: MINI_SIZE.width, height: getMiniWindowHeight() }).catch(() => {});
+        };
+        requestAnimationFrame(doResize);
+        miniResizeTimer = setTimeout(doResize, 80);
     }
 
     function updateIdleClass() {
@@ -434,12 +617,29 @@
         }
     }
 
+    async function captureFullWindowSize() {
+        if (!isTauri || isMini) return;
+        try {
+            const size = await invoke('get_window_size');
+            const width = Array.isArray(size) ? size[0] : size.width;
+            const height = Array.isArray(size) ? size[1] : size.height;
+            if (width >= 300 && height >= 300) {
+                lastFullSize = { width: Math.max(width, FULL_DEFAULT_SIZE.width), height };
+                saveRuntimeState();
+            }
+        } catch (e) {
+            console.error('Failed to capture full window size:', e);
+        }
+    }
+
+    function getMiniWindowHeight() {
+        return getAllTasks().some(t => t.running) ? MINI_SIZE.runningHeight : MINI_SIZE.idleHeight;
+    }
+
     function renderQuickGrid() {
         const grid = document.getElementById('quickGrid');
         const runningTasks = getAllTasks().filter(t => t.running);
         const bgRunningCount = runningTasks.filter(t => !t.isPrimary).length;
-
-        const quickIds = QUICK_TASKS.map(t => t.id);
 
         if (isMini) {
             grid.innerHTML = QUICK_TASKS.map(t => {
@@ -496,9 +696,39 @@
             }).join('');
         }
 
+        if (!isMini) {
+            QUICK_TASKS.forEach(t => {
+                const task = tasks[t.id];
+                if (!task || !task.running) return;
+                const timeEl = grid.querySelector(`.quick-btn[data-id="${t.id}"] .qb-time`);
+                if (timeEl) timeEl.textContent = formatTime(task.remaining);
+            });
+        }
+
         grid.querySelectorAll('.quick-btn').forEach(btn => {
             btn.addEventListener('click', () => toggleTask(btn.dataset.id));
         });
+    }
+
+    function renderMiniNextTask() {
+        const el = document.getElementById('miniNextTask');
+        if (!el) return;
+
+        if (!isMini) {
+            el.textContent = '';
+            el.style.display = 'none';
+            return;
+        }
+
+        const next = getNextDueTask(true);
+        if (!next) {
+            el.textContent = '';
+            el.style.display = 'none';
+            return;
+        }
+
+        el.style.display = 'block';
+        el.textContent = '下个到点 ' + next.name + ' · ' + formatTime(next.remaining);
     }
 
     function renderRunningBar() {
@@ -507,8 +737,8 @@
             bar.style.display = 'none';
             return;
         }
-        const running = getAllTasks().filter(t => t.running);
-        if (running.length <= 1) {
+        const running = getAllTasks().filter(t => t.running && t.isCustom);
+        if (!running.length) {
             bar.style.display = 'none';
             return;
         }
@@ -615,9 +845,11 @@
         }
 
         const id = 'c_' + Date.now();
-        data.customTasks.push({ id, name, duration, isLoop });
+        const task = { id, name, duration, isLoop };
+        data.customTasks.push(task);
+        tasks[id] = createCustomTaskState(task);
         save();
-        initTasks();
+        saveRuntimeState();
         hideAddForm();
         renderAll();
     }
@@ -629,6 +861,7 @@
         data.customTasks = data.customTasks.filter(t => t.id !== id);
         delete tasks[id];
         save();
+        saveRuntimeState();
         renderAll();
     }
 
@@ -712,6 +945,7 @@
         if (isTauri) {
             document.getElementById('autostartToggle').checked = data.settings.autostartEnabled;
         }
+        renderQuickTaskSettings();
     }
 
     function updateSettings() {
@@ -724,6 +958,85 @@
         if (data.settings.notificationEnabled) {
             initNotification();
         }
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, ch => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[ch]));
+    }
+
+    function renderQuickTaskSettings() {
+        const list = document.getElementById('quickTaskSettings');
+        if (!list) return;
+
+        list.innerHTML = QUICK_TASKS.map((task, index) => `
+            <div class="quick-setting-item" data-id="${task.id}">
+                <div class="quick-setting-index">${index + 1}</div>
+                <input class="quick-setting-name" type="text" maxlength="20" value="${escapeHtml(task.name)}" title="任务名称">
+                <input class="quick-setting-time" type="number" min="1" max="180" value="${task.time}" title="分钟">
+                <label class="quick-setting-loop">
+                    <input class="quick-setting-loop-input" type="checkbox" ${task.loop ? 'checked' : ''}>
+                    <span>循环</span>
+                </label>
+            </div>
+        `).join('');
+    }
+
+    function collectQuickTaskSettings() {
+        const items = Array.from(document.querySelectorAll('.quick-setting-item'));
+        return items.map(item => ({
+            id: item.dataset.id,
+            name: item.querySelector('.quick-setting-name').value.trim(),
+            time: parseInt(item.querySelector('.quick-setting-time').value, 10),
+            loop: item.querySelector('.quick-setting-loop-input').checked
+        }));
+    }
+
+    function applyQuickTaskSettings(nextSettings) {
+        const previousState = {};
+        Object.entries(tasks).forEach(([id, task]) => {
+            previousState[id] = {
+                running: task.running,
+                remaining: task.remaining,
+                isPrimary: task.isPrimary
+            };
+        });
+
+        QUICK_TASKS = normalizeQuickTasks(nextSettings);
+        data.quickTasks = QUICK_TASKS.map(t => ({ id: t.id, name: t.name, time: t.time, loop: t.loop }));
+        initTasks();
+
+        Object.entries(previousState).forEach(([id, state]) => {
+            const task = tasks[id];
+            if (!task || !state.running) return;
+            task.running = true;
+            task.remaining = Math.max(1, Math.min(state.remaining || task.total, task.total));
+            task.isPrimary = !!state.isPrimary;
+        });
+
+        const running = getAllTasks().filter(t => t.running);
+        if (running.length && !running.some(t => t.isPrimary)) {
+            running[0].isPrimary = true;
+        }
+
+        save();
+        saveRuntimeState();
+        renderQuickTaskSettings();
+        renderAll();
+        updateTrayTooltip();
+    }
+
+    function saveQuickTaskSettings() {
+        applyQuickTaskSettings(collectQuickTaskSettings());
+    }
+
+    function resetQuickTaskSettings() {
+        applyQuickTaskSettings(DEFAULT_QUICK_TASKS);
     }
 
     async function toggleAutostart() {
@@ -860,6 +1173,7 @@
 
     async function switchToMini() {
         if (isMini) return;
+        await captureFullWindowSize();
         isMini = true;
         const app = document.getElementById('app');
         const toggle = document.getElementById('modeToggle');
@@ -872,7 +1186,8 @@
         if (isTauri) {
             try {
                 await invoke('set_always_on_top', { alwaysOnTop: data.settings.alwaysOnTop });
-                await invoke('set_window_size', { width: 176, height: 230 });
+                await invoke('set_window_resizable', { resizable: false });
+                await invoke('set_window_size', { width: MINI_SIZE.width, height: getMiniWindowHeight() });
                 await invoke('set_skip_taskbar', { skip: true });
                 isSnapped = await invoke('is_snapped');
             } catch (e) {
@@ -886,6 +1201,7 @@
         }
 
         hideAddForm();
+        saveRuntimeState();
         renderAll();
         if (isTauri) {
             initEdgeSnap();
@@ -916,7 +1232,11 @@
         if (isTauri) {
             try {
                 await invoke('set_always_on_top', { alwaysOnTop: false });
-                await invoke('set_window_size', { width: 380, height: 560 });
+                await invoke('set_window_size', {
+                    width: lastFullSize.width || FULL_DEFAULT_SIZE.width,
+                    height: lastFullSize.height || FULL_DEFAULT_SIZE.height
+                });
+                await invoke('set_window_resizable', { resizable: true });
                 await invoke('set_skip_taskbar', { skip: false });
             } catch (e) {
                 console.error('Failed to switch to full mode in Tauri:', e);
@@ -932,6 +1252,7 @@
         document.removeEventListener('mouseleave', handleMouseLeaveForSnap);
 
         hideAddForm();
+        saveRuntimeState();
         renderAll();
     }
 
@@ -981,6 +1302,7 @@
         });
 
         document.getElementById('addTaskBtn').addEventListener('click', showAddForm);
+        document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
         document.getElementById('cancelAddBtn').addEventListener('click', hideAddForm);
         document.getElementById('confirmAddBtn').addEventListener('click', addCustomTask);
 
@@ -995,6 +1317,8 @@
         document.getElementById('settingsBtn').addEventListener('click', () => openModal('settingsModal'));
         document.getElementById('statsBtn').addEventListener('click', () => openModal('statsModal'));
         document.getElementById('exportBtn').addEventListener('click', exportHTML);
+        document.getElementById('saveQuickTasksBtn').addEventListener('click', saveQuickTaskSettings);
+        document.getElementById('resetQuickTasksBtn').addEventListener('click', resetQuickTaskSettings);
 
         document.querySelectorAll('.modal-close').forEach(btn => {
             btn.addEventListener('click', () => closeModal(btn.dataset.modal));

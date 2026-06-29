@@ -27,7 +27,6 @@ struct SnapState {
 struct AppState {
     snap: Mutex<SnapState>,
     autostart_enabled: Mutex<bool>,
-    frame_diff: Mutex<(f64, f64)>,
 }
 
 #[tauri::command]
@@ -36,12 +35,22 @@ fn set_always_on_top(window: Window, always_on_top: bool) -> Result<(), String> 
 }
 
 #[tauri::command]
-fn set_window_size(window: Window, width: i32, height: i32, state: State<AppState>) -> Result<(), String> {
-    let (dw, dh) = *state.frame_diff.lock().unwrap();
-    let w = width as f64 + dw;
-    let h = height as f64 + dh;
-    window.set_size(Size::Logical(LogicalSize { width: w, height: h }))
+fn set_window_size(window: Window, width: i32, height: i32) -> Result<(), String> {
+    window.set_size(Size::Logical(LogicalSize { width: width as f64, height: height as f64 }))
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_window_size(window: Window) -> Result<(i32, i32), String> {
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let logical = size.to_logical::<i32>(scale);
+    Ok((logical.width, logical.height))
+}
+
+#[tauri::command]
+fn set_window_resizable(window: Window, resizable: bool) -> Result<(), String> {
+    window.set_resizable(resizable).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -352,23 +361,9 @@ fn main() {
                 restore_position: None,
             }),
             autostart_enabled: Mutex::new(false),
-            frame_diff: Mutex::new((0.0, 0.0)),
         })
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
-
-            {
-                let state = app.state::<AppState>();
-                if let (Ok(inner), Ok(outer), Ok(scale)) = (
-                    window.inner_size(),
-                    window.outer_size(),
-                    window.scale_factor(),
-                ) {
-                    let il = inner.to_logical::<f64>(scale);
-                    let ol = outer.to_logical::<f64>(scale);
-                    *state.frame_diff.lock().unwrap() = (ol.width - il.width, ol.height - il.height);
-                }
-            }
 
             let toggle_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyT);
             let mode_shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyM);
@@ -535,6 +530,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             set_always_on_top,
             set_window_size,
+            get_window_size,
+            set_window_resizable,
             set_window_position,
             get_window_position,
             hide_window,

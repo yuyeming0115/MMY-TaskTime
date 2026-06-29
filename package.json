@@ -4,9 +4,10 @@
   "description": "MMY-TaskTime 极简任务计时器 - 悬浮置顶，多任务并行，心流操作体验",
   "private": true,
   "scripts": {
+    "prepare:dist": "node scripts/prepare-dist.js",
     "tauri": "tauri",
-    "dev": "set \"PATH=C:\\Users\\EDY\\.cargo\\bin;%PATH%\" && tauri dev",
-    "build": "set \"PATH=C:\\Users\\EDY\\.cargo\\bin;%PATH%\" && tauri build"
+    "dev": "npm run prepare:dist && set \"PATH=C:\\Users\\EDY\\.cargo\\bin;%PATH%\" && tauri dev",
+    "build": "npm run prepare:dist && set \"PATH=C:\\Users\\EDY\\.cargo\\bin;%PATH%\" && tauri build"
   },
   "repository": {
     "type": "git",
