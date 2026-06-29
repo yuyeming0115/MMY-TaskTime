@@ -757,15 +757,7 @@ body::before {
 }
 
 .mini-mode .clock-icon {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.08);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    line-height: 1;
+    display: none;
 }
 
 .mini-mode .clock {
@@ -1437,6 +1429,20 @@ body.theme-dark .full-mode .window-close-btn {
 body.theme-dark .full-mode .bar-btn:hover,
 body.theme-dark .full-mode .mode-toggle:hover {
     background: rgba(255,255,255,0.14);
+}
+
+/* Dark mode: fix quick-btn text visibility for loop/water types */
+body.theme-dark .full-mode .quick-btn.running.loop,
+body.theme-dark .full-mode .quick-btn.primary-active.loop {
+    background: rgba(255,149,0,0.2);
+    border-color: #FF9500;
+    color: #FFB340;
+}
+body.theme-dark .full-mode .quick-btn.running.water,
+body.theme-dark .full-mode .quick-btn.primary-active.water {
+    background: rgba(52,199,89,0.15);
+    border-color: #34C759;
+    color: #5ED36A;
 }
 
 body.theme-dark.in-tauri .app-container.mini-mode,
